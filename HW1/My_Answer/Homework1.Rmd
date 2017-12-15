@@ -1,0 +1,253 @@
+---
+title: "Homework1"
+author: "Yueming Zhang"
+date: "9/25/2017"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 5
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1 (Forest Fires) [40 points]
+
+> First load the file forestfires.csv, next perform the following tasks for the data.
+
+```{r}
+library(ggplot2)
+forestfires <- read.csv("~/Documents/NEU/2017Fall/IE7275/HW/HW1/forestfires.csv")
+attach(forestfires)
+```
+
+Before we start the tasks, let's take a look at the data structure.
+
+```{r}
+str(forestfires)
+```
+
+We want to modify the factor **month** and **day** into an ordered sequence.
+
+```{r}
+month <- factor(month, levels = c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))
+day <- factor(day, levels = c("mon", "tue", "wed", "thu", "fri", "sat", "sun"))
+```
+
+> a. Plot area vs.temp, area vs. month, area vs. DC, area vs. RH for January through December combined in 1 graph. Hint: Place area on Y axis and use 2x2 matrix to place the plots adjacent to each other.
+
+```{r fig.align = "center"}
+par(mfrow = c(2, 2))
+plot(temp, area, xlab = "temperature", ylab = "area", main = "area vs. temp")
+plot(month, area, xlab = "month", ylab = "area", main = "area vs. month")
+plot(DC, area, xlab = "DC index", ylab = "area", main = "area vs. DC")
+plot(RH, area, xlab = "Relative humidity", ylab = "area", main = "area vs. RH")
+```
+
+> b. Plot the histogram of wind speed (km/h) from January through December.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 1))
+hist(wind, col = "light blue")
+```
+
+> c. Compute the summary statistics (min, 1Q, mean, median, 3Q, max,) of part b.
+
+```{r}
+summary(wind)
+```
+
+> d. Add a density line to the histogram in part b.
+
+Note that the histogram in part b shows the frequency of wind, we need to change it into density.
+
+```{r fig.align = "center"}
+hist(wind, col = "light blue", freq=FALSE)
+lines(density(wind), col="blue", lwd=2)
+```
+
+> e. Plot the density function of months. Use different colors in the graph to interpret your result clearly. (you need to plot either wind/rain amount for months, basically means you plot the density of wind/rain per months . You use months as color factor.)
+
+We want to plot the density of wind.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 1))
+qplot(wind, geom = "density", xlab = "wind", color = month)
+```
+
+> f. Plot the scatter matrix for temp, RH, DC and DMC. How you can interpret the result in terms of correlation among these data.
+
+```{r fig.align = "center"}
+library(gclus)
+mydata <- forestfires[c("temp", "RH", "DC", "DMC")]
+mydata.corr <- abs(cor(mydata))
+myorder <- order.single(mydata.corr)
+mycolors <- dmat.color(mydata.corr)
+cpairs(mydata, myorder, panel.colors = mycolors, gap=.5, main="Variables Ordered and Colored by Correlation")
+```
+
+As shown in the figure:
+
+- The correlation between DMC and DC may be positive and close to one, which means they may have positive linear relationship.
+- There is no strong linear relationship between DMC and temp, but it seems to have an up trend.
+- DMC and RH do not have strong relationship, correlation may close to zero.
+- DC does not have strong linear relationship with temp and RH. But DC might have two clusters separated by around 200.
+- There is no strong linear relationship between temp and RH, but it seems to have a down trend.
+
+> g. Create boxplot for wind, ISI and DC. Are there anomalies/outliers. Interpret your result.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 3))
+boxplot(wind, main = "Boxplot of wind", xlab = "Wind")
+boxplot(ISI, main = "Boxplot of ISI", xlab = "ISI")
+boxplot(DC, main = "Boxplot of DC", xlab = "DC")
+```
+
+As shown in the figure:
+
+- Wind has some outliers above maximum value, but they are not very far from the box.
+- ISI has one extreme outlier, and several others which are very close to the maximum and minimum value.
+- DC has outliers smaller than minimum value.
+
+> h. Create the histogram of DMC. Create the histogram of log of DMC. Compare the result and explain your answer.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 2))
+hist(DMC)
+hist(log(DMC))
+```
+
+Before log transformation, the DMC distribution is right skewed. After the transformation, the histogram is left skewed. So the log transformation is not considered to be a good transformation.
+
+We want to try the square root transformation on DMC.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 1))
+hist(sqrt(DMC))
+```
+
+The graph looks more like a normal distribution with the sqrt transformation.
+
+<br>
+
+## Problem 2 (Twitter Accounts) [40 points]
+
+> First load the file raw_data.csv, next perform the following tasks.
+
+```{r}
+library(ggplot2)
+twitter <- read.csv("~/Documents/NEU/2017Fall/IE7275/HW/HW1/M01_quasi_twitter.csv")
+attach(twitter)
+```
+
+> a. How are the data distributed for friend_count variable?
+
+We want to use boxplot to see how is this variable distributed.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 1))
+boxplot(friends_count, main = "Boxplot of friends_count", xlab = "friends_count")
+```
+
+From the graph, we can see the data is dense at the bottom, and there are too many outliers above the maximum value.
+
+> b. Compute the summery statistics (min, 1Q, mean, median, 3Q, max) on friend_count?
+
+```{r}
+summary(friends_count)
+```
+
+> c. How are the data quality in friend_count variable? Interpret your answer.
+
+```{r fig.align = "center"}
+hist(friends_count)
+```
+
+We can see the data is right skewed, which causes the difficulty of understanding the pattern of the massive data at the left side. And it's also hard to get information from the right long tail because it's too spread.
+
+We suggest to apply log transformation to the data:
+
+```{r fig.align = "center"}
+hist(log(friends_count))
+```
+
+> d. Produce a 3D scatter plot with highlighting to impression the depth for variables below on M01_quasi_twitter.csv dataset. created_at_year, education, age. Put the name of the scatter plot “3D scatter plot”.
+
+```{r fig.align = "center"}
+library(scatterplot3d)
+scatterplot3d(created_at_year, education, age, main = "3D scatter plot", highlight.3d = TRUE, type = "h", pch = 20)
+```
+
+> e. Consider 650, 1000,900,300 and 14900 tweeter accounts are in UK, Canada, India, Australia and US respectively. Plot the percentage Pie chart includes percentage amount and country name adjacent to it, and also plot 3D pie chart for those  countries along with the percentage pie chart. Hint: Use C=(1, 2) matrix form to plot the charts together.
+
+```{r fig.align = "center"}
+par(mfrow = c(1, 2))
+# Pencentile Pie Chart
+slices <- c(650, 1000, 900, 300, 14900)
+lbls <- c("UK", "Canada", "India", "Australia", "US")
+pct <- round(slices/sum(slices)*100)
+lbls2 <- paste(lbls, " ", pct, "%", sep = "")
+pie(slices, labels = lbls2, col = rainbow(length(lbls2)), main = "Pie Char with Percentage")
+# 3D Pie Chart
+library(plotrix)
+pie3D(slices, radius = 1.5, labelcex = 0.7, labels = lbls2, col = rainbow(length(lbls2)), main = "3D Pie Chart")
+```
+
+> f. Create kernel density plot of created_at_year variable and interpret the result.
+
+```{r fig.align = "center"}
+par(mfrow=c(1,1))
+d <- density(created_at_year)
+plot(d, main = "Kernel Density of created_at_year")
+polygon(d, col="red", border="blue")
+rug(created_at_year, col="brown")
+```
+
+From the graph, we find each year has the same density change pattern, which is "high-low-high". So there might be seasonal factor in the data. To avoid the seasonal effect, we can use the one year average value to represent the whole year in order to see the variation between different years.
+
+<br>
+
+## Problem 3 (Insurance Claims) [20 points]
+
+First load the file raw_data.csv, next perform the following tasks.
+
+```{r}
+library(ggplot2)
+data <- read.csv("~/Documents/NEU/2017Fall/IE7275/HW/HW1/raw_data.csv")
+```
+
+> a. Normalize the data and create new dataset with normalized data and name it Ndata.
+
+```{r}
+Ndata <- scale(data, center=TRUE, scale=TRUE)
+Ndata <- as.data.frame(Ndata)
+```
+
+> b. Create the boxplot of all the variables in their original form.
+
+```{r fig.align = "center"}
+boxplot(data, main = "Boxplot of original data")
+```
+
+> c. Create boxplot of all the variables in their normalized form.
+
+```{r fig.align = "center"}
+boxplot(Ndata, main = "Boxplot of normalized data")
+```
+
+> d. Compare the result of part b and part c; interpret your answer.
+
+In part b, it is clear to see each data's distribution and other information. But it is difficult to compare among four variables, because they are on different scale. After normalization, in part c, it is easier to compare the variation of four variables. And it does not affect us to see each data's distribution condition.
+
+> e. Prepare scatter plot of variables A and B. How correlated the data are in these variables. Interpret your answer.
+
+```{r fig.align = "center"}
+library(car)
+scatterplot(Ndata$A~Ndata$B, main = "Scatterplot of A(Sustainability) and B(Carbon footprint)", xlab = "B(Carbon footprint)", ylab = "A(Sustainability)")
+```
+
+The data points are randomly spread in the graph, so variables A and B do not have linear relationship. As a result, the correlation of A and B are very close to zero.
+
