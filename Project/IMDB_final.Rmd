@@ -1,0 +1,815 @@
+---
+title: "Project Report: IMDB 5000 Movie Dataset"
+author: "Yueming Zhang"
+date: "12/7/2017"
+output:
+  html_document: 
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<P style="page-break-before: always">
+
+## 1 Introduction
+
+### 1.1 Background
+
+A commercial success movie not only entertains audience, but also enables film companies to gain tremendous profit. A lot of factors such as good directors, experienced actors are considerable for creating good movies. However, famous directors and actors can always bring an expected box-office income but cannot guarantee a highly rated imdb score.
+
+### 1.2 Data Description
+
+The dataset is from Kaggle website. It contains 28 variables for 5043 movies, spanning across 100 years in 66 countries. There are 2399 unique director names, and thousands of actors/actresses. “imdb_score” is the response variable while the other 27 variables are possible predictors.
+
+The original dataset has been replaced in Kaggle, here’s the link for the original dataset from Dataworld:
+
+https://data.world/data-society/imdb-5000-movie-dataset
+
+
+Variable Name            | Description
+---------------------|----------------------------------------------
+movie_title              | Title of the Movie
+duration                 | Duration in minutes
+director_name            | Name of the Director of the Movie
+director_facebook_likes  | Number of likes of the Director on his Facebook Page
+actor_1_name             | Primary actor starring in the movie
+actor_1_facebook_likes   | Number of likes of the Actor_1 on his/her Facebook Page
+actor_2_name             | Other actor starring in the movie
+actor_2_facebook_likes   | Number of likes of the Actor_2 on his/her Facebook Page
+actor_3_name             | Other actor starring in the movie
+actor_3_facebook_likes   | Number of likes of the Actor_3 on his/her Facebook Page
+num_user_for_reviews     | Number of users who gave a review
+num_critic_for_reviews   | Number of critical reviews on imdb
+num_voted_users          | Number of people who voted for the movie
+cast_total_facebook_likes| Total number of facebook likes of the entire cast of the movie
+movie_facebook_likes     | Number of Facebook likes in the movie page
+plot_keywords            | Keywords describing the movie plot
+facenumber_in_poster     | Number of the actor who featured in the movie poster
+color                    | Film colorization. ‘Black and White’ or ‘Color’
+genres                   | Film categorization like ‘Animation’, ‘Comedy’, ‘Romance’, ‘Horror’, ‘Sci-Fi’, ‘Action’, ‘Family’
+title_year               | The year in which the movie is released (1916:2016)
+language                 | English, Arabic, Chinese, French, German, Danish, Italian, Japanese etc
+country                  | Country where the movie is produced
+content_rating           | Content rating of the movie
+aspect_ratio             | Aspect ratio the movie was made in
+movie_imdb_link          | IMDB link of the movie
+gross                    | Gross earnings of the movie in Dollars
+budget                   | Budget of the movie in Dollars
+imdb_score               | IMDB Score of the movie on IMDB
+
+### 1.3 Problem Statement
+
+Based on the massive movie information, it would be interesting to understand what are the important factors that make a movie more successful than others. So, we would like to analyze what kind of movies are more successful, in other words, get higher IMDB score. We also want to show the results of this analysis in an intuitive way by visualizing outcome using ggplot2 in R.
+
+In this project, we take IMDB scores as response variable and focus on operating predictions by analyzing the rest of variables in the IMDB 5000 movie data. The results can help film companies to understand the secret of generating a commercial success movie.
+
+
+
+<P style="page-break-before: always">
+
+## 2 Data Exploration
+
+### 2.1 Load Data
+
+```{r, message=FALSE, warning=FALSE}
+# Load packages
+library(ggplot2) # visualization
+library(ggrepel)
+library(ggthemes) # visualization
+library(scales) # visualization
+library(dplyr) # data manipulation
+library(VIM)
+library(data.table)
+library(formattable)
+library(plotly)
+library(corrplot)
+library(GGally)
+library(caret)
+library(car)
+```
+
+Now that our packages are loaded, let’s read in and take a peek at the data.
+
+```{r}
+IMDB <- read.csv("~/Documents/NEU/2017Fall/IE7275/Project/movie_metadata.csv")
+str(IMDB)
+```
+
+We have 5043 observations of 28 variables. The response variable "imdb_score" is numerical, and the predictors are mixed with numerical and categorical variables.
+
+### 2.2 Remove Duplicates
+
+In the IMDB data, we have some duplicate rows. We want to remove the 45 duplicated rows and keep the unique ones.
+
+```{r}
+# duplicate rows
+sum(duplicated(IMDB))
+# delete duplicate rows
+IMDB <- IMDB[!duplicated(IMDB), ]
+```
+
+We get 4998 observations left.
+
+### 2.3 Tidy Up Movie Title
+
+All the movie titles have a special character (Â) at the end and some have whitespaces, they might be generated during the data collection. Let's remove them.
+
+```{r, results='hide'}
+library(stringr)
+IMDB$movie_title <- gsub("Â", "", as.character(factor(IMDB$movie_title)))
+str_trim(IMDB$movie_title, side = "right")
+```
+
+### 2.4 Split Genres
+
+Each record of genres is combined with a few types, which will cause the difficulty of analyzing.
+
+```{r}
+head(IMDB$genres)
+```
+
+First, we want to know if genre is related to imdb score. We divide the string into several substrings by the separator '|', and save each substring along with its correspongding imdb score in the other data frame **genres.df**. Then we plot a histogram for the score and genres to see if they are relative or not.
+
+```{r}
+# create a new data frame
+genres.df <- as.data.frame(IMDB[,c("genres", "imdb_score")])
+# separate different genres into new columns
+genres.df$Action <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Action") 1 else 0)
+genres.df$Adventure <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Adventure") 1 else 0)
+genres.df$Animation <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Animation") 1 else 0)
+genres.df$Biography <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Biography") 1 else 0)
+genres.df$Comedy <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Comedy") 1 else 0)
+genres.df$Crime <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Crime") 1 else 0)
+genres.df$Documentary <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Documentary") 1 else 0)
+genres.df$Drama <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Drama") 1 else 0)
+genres.df$Family <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Family") 1 else 0)
+genres.df$Fantasy <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Fantasy") 1 else 0)
+genres.df$`Film-Noir` <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Film-Noir") 1 else 0)
+genres.df$History <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "History") 1 else 0)
+genres.df$Horror <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Horror") 1 else 0)
+genres.df$Musical <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Musical") 1 else 0)
+genres.df$Mystery <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Mystery") 1 else 0)
+genres.df$News <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "News") 1 else 0)
+genres.df$Romance <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Romance") 1 else 0)
+genres.df$`Sci-Fi` <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Sci-Fi") 1 else 0)
+genres.df$Short <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Short") 1 else 0)
+genres.df$Sport <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Sport") 1 else 0)
+genres.df$Thriller <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Thriller") 1 else 0)
+genres.df$War <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "War") 1 else 0)
+genres.df$Western <- sapply(1:length(genres.df$genres), function(x) if (genres.df[x,1] %like% "Western") 1 else 0)
+# get the mean of imdb score for different genres
+means <- rep(0,23)
+for (i in 1:23) {
+  means[i] <- mean(genres.df$imdb_score[genres.df[i+2]==1])
+}
+# plot the means
+barplot(means, main = "Average imdb scores for different genres")
+```
+
+There isn't much difference in the averages of imdb score related to different genres, almost all the averages are in the same range of 6~8. So we think the predictor "genres" can be removed because it's not really related to the score.
+
+```{r}
+IMDB <- subset(IMDB, select = -c(genres))
+```
+
+
+
+<P style="page-break-before: always">
+
+## 3 Data Cleaning
+
+### 3.1 Missing Values
+
+To find missing values in each column, we use *colSums()* function to aggregate NA in each column.
+
+```{r}
+colSums(sapply(IMDB, is.na))
+```
+
+Let's use heatmap to visualize missing values.
+
+```{r}
+missing.values <- aggr(IMDB, sortVars = T, prop = T, sortCombs = T, cex.lab = 1.5, cex.axis = .6, cex.numbers = 5, combined = F, gap = -.2)
+```
+
+#### 3.1.1 Delete some rows
+
+Since gross and budget have too many missing values, and we want to keep these two variables for the following analysis, we can only delete rows with null values for gross and budget because imputation will not do a good job here.
+
+```{r}
+IMDB <- IMDB[!is.na(IMDB$gross), ]
+IMDB <- IMDB[!is.na(IMDB$budget), ]
+dim(IMDB)
+```
+
+Not too bad, we only omitted 23% of the observations. Now our data has 3857 observations.
+
+Let's see how many complete cases we have.
+
+```{r}
+sum(complete.cases(IMDB))
+```
+
+So, there are still 3857 - 3768 = 89 rows with NAs.
+
+#### 3.1.2 Analyze aspect ratio
+
+let's take a look at rest columns with missing values.
+
+```{r}
+colSums(sapply(IMDB, is.na))
+```
+
+Now aspect_ratio has the highest number of missing values. Before trying to impute the missing values, we want to check how important is this variable.
+
+```{r}
+table(IMDB$aspect_ratio)
+```
+
+The most common aspect ratios are 1.85 and 2.35. For analyzing purpose, we group other ratios together.
+
+In order to compute the mean of imdb score for different aspect_ratio, we need to replace NA with 0 first.
+
+```{r}
+IMDB$aspect_ratio[is.na(IMDB$aspect_ratio)] <- 0
+mean(IMDB$imdb_score[IMDB$aspect_ratio == 1.85])
+mean(IMDB$imdb_score[IMDB$aspect_ratio == 2.35])
+mean(IMDB$imdb_score[IMDB$aspect_ratio != 1.85 & IMDB$aspect_ratio != 2.35])
+```
+
+From the means of imdb score for different aspect ratios, we can see there is no significant difference, all the means fall in the range of 6.3~6.8. So, removing this variable won't affect our following analysis.
+
+```{r}
+IMDB <- subset(IMDB, select = -c(aspect_ratio))
+```
+
+#### 3.1.3 Deal with 0s
+
+We notice that there are some 0 values which should also be regarded as missing value except for predictor facenumber_in_poster.
+
+First we need to replace NA with column average for facenumber_in_poster, then replace 0s in other predictors with NA, and lastly replace all NAs with their respective column mean.
+
+```{r}
+# replace NA with column average for facenumber_in_poster
+IMDB$facenumber_in_poster[is.na(IMDB$facenumber_in_poster)] <- round(mean(IMDB$facenumber_in_poster, na.rm = TRUE))
+# convert 0s into NAs for other predictors
+IMDB[,c(5,6,8,13,24,26)][IMDB[,c(5,6,8,13,24,26)] == 0] <- NA
+# impute missing value with column mean
+IMDB$num_critic_for_reviews[is.na(IMDB$num_critic_for_reviews)] <- round(mean(IMDB$num_critic_for_reviews, na.rm = TRUE))
+IMDB$duration[is.na(IMDB$duration)] <- round(mean(IMDB$duration, na.rm = TRUE))
+IMDB$director_facebook_likes[is.na(IMDB$director_facebook_likes)] <- round(mean(IMDB$director_facebook_likes, na.rm = TRUE))
+IMDB$actor_3_facebook_likes[is.na(IMDB$actor_3_facebook_likes)] <- round(mean(IMDB$actor_3_facebook_likes, na.rm = TRUE))
+IMDB$actor_1_facebook_likes[is.na(IMDB$actor_1_facebook_likes)] <- round(mean(IMDB$actor_1_facebook_likes, na.rm = TRUE))
+IMDB$cast_total_facebook_likes[is.na(IMDB$cast_total_facebook_likes)] <- round(mean(IMDB$cast_total_facebook_likes, na.rm = TRUE))
+IMDB$actor_2_facebook_likes[is.na(IMDB$actor_2_facebook_likes)] <- round(mean(IMDB$actor_2_facebook_likes, na.rm = TRUE))
+IMDB$movie_facebook_likes[is.na(IMDB$movie_facebook_likes)] <- round(mean(IMDB$movie_facebook_likes, na.rm = TRUE))
+```
+
+Now we finished imputing the numeric missing values. There are still some categorical missing values, let's take a look.
+
+#### 3.1.4 Sort out content ratings
+
+We find there are still some missing values in content_rating, which are marked as "".
+
+```{r}
+table(IMDB$content_rating)
+```
+
+Blanks should be taken as missing value. Since these missing values cannot be replaced with reasonable data, we delete these rows.
+
+```{r}
+IMDB <- IMDB[!(IMDB$content_rating %in% ""),]
+```
+
+According to the history of naming these different content ratings, we find M = GP = PG, X = NC-17. We want to replace M and GP with PG, replace X with NC-17, because these two are what we use nowadays.
+
+```{r}
+IMDB$content_rating[IMDB$content_rating == 'M']   <- 'PG' 
+IMDB$content_rating[IMDB$content_rating == 'GP']  <- 'PG' 
+IMDB$content_rating[IMDB$content_rating == 'X']   <- 'NC-17'
+```
+
+We want to replace "Approved", "Not Rated", "Passed", "Unrated" with the most common rating "R".
+
+```{r}
+IMDB$content_rating[IMDB$content_rating == 'Approved']  <- 'R' 
+IMDB$content_rating[IMDB$content_rating == 'Not Rated'] <- 'R' 
+IMDB$content_rating[IMDB$content_rating == 'Passed']    <- 'R' 
+IMDB$content_rating[IMDB$content_rating == 'Unrated']   <- 'R' 
+IMDB$content_rating <- factor(IMDB$content_rating)
+table(IMDB$content_rating)
+```
+
+Now we only have 5 different content ratings.
+
+### 3.2 Add Columns
+
+We have gross and budget information. So let's add two colums: profit and percentage return on investment for further analysis.
+
+```{r}
+IMDB <- IMDB %>% 
+  mutate(profit = gross - budget,
+         return_on_investment_perc = (profit/budget)*100)
+```
+
+### 3.3 Remove Columns
+
+#### 3.3.1 Is the color of a movie influential?
+
+```{r}
+table(IMDB$color)
+```
+
+More than 96% movies are colored, which indicates that this predictor is nearly constant. Let's remove this predictor.
+
+```{r}
+# delete predictor color
+IMDB <- subset(IMDB, select = -c(color))
+```
+
+#### 3.3.2 Is language an important factor for imdb score? What about country?
+
+```{r}
+table(IMDB$language)
+```
+
+Over 95% movies are in English, which means this variable is nearly constant. Let's remove it.
+
+```{r}
+IMDB <- subset(IMDB, select = -c(language))
+```
+
+Let's take a look at predictor country.
+
+```{r}
+table(IMDB$country)
+```
+
+Around 79% movies are from USA, 8% from UK, 13% from other countries. So we group other countries together to make this categorical variable with less levels: USA, UK, Others.
+
+```{r}
+levels(IMDB$country) <- c(levels(IMDB$country), "Others")
+IMDB$country[(IMDB$country != 'USA')&(IMDB$country != 'UK')] <- 'Others' 
+IMDB$country <- factor(IMDB$country)
+table(IMDB$country)
+```
+
+
+
+<P style="page-break-before: always">
+
+## 4 Data Visualization
+
+### 4.1 Histogram of Movie Released
+
+Movie production just exploded after year 1990. It could be due to advancement in technology and commercialisation of internet.
+
+```{r}
+ggplot(IMDB, aes(title_year)) +
+  geom_bar() +
+  labs(x = "Year movie was released", y = "Movie Count", title = "Histogram of Movie released") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+From the graph, we see there aren't many records of movies released before 1980. It's better to remove those records because they might not be representative.
+
+```{r}
+IMDB <- IMDB[IMDB$title_year >= 1980,]
+```
+
+### 4.2 Top 20 movies based on its Profit
+
+```{r}
+IMDB %>%
+  filter(title_year %in% c(2000:2016)) %>%
+  arrange(desc(profit)) %>%
+  top_n(20, profit) %>%
+  ggplot(aes(x=budget/1000000, y=profit/1000000)) +
+  geom_point() +
+  geom_smooth() + 
+  geom_text_repel(aes(label=movie_title)) +
+  labs(x = "Budget $million", y = "Profit $million", title = "Top 10 Profitable Movies") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+These are the top 20 movies based on the Profit earned (Gross - Budget). It can be inferred from this plot that high budget movies tend to earn more profit. The trend is almost linear, with profit increasing with the increase in budget.
+
+### 4.3 Top 20 movies based on its Return on Investment
+
+```{r}
+IMDB %>%
+  filter(budget > 100000) %>%
+  mutate(profit = gross - budget,
+         return_on_investment_perc = (profit/budget)*100) %>%
+  arrange(desc(profit)) %>%
+  top_n(20, profit) %>%
+  ggplot(aes(x=budget/1000000, y = return_on_investment_perc)) + 
+  geom_point(size = 2) + 
+  geom_smooth(size = 1) + 
+  geom_text_repel(aes(label = movie_title), size = 3) + 
+  xlab("Budget $million") + 
+  ylab("Percent Return on Investment") + 
+  ggtitle("20 Most Profitable Movies based on its Return on Investment")
+```
+
+These are the top 20 movies based on its Percentage Return on Investment ((profit/budget)*100).
+
+Since profit earned by a movie does not give a clear picture about its monetary success over the years, this analysis, over the absolute value of the Return on Investment(ROI) across its Budget, would provide better results.
+
+As hypothesized, the ROI is high for Low Budget Films and decreases as the budget of the movie increases.
+
+### 4.4 Top 20 directors with highest average IMDB score
+
+```{r}
+IMDB %>%
+  group_by(director_name) %>%
+  summarise(avg_imdb = mean(imdb_score)) %>%
+  arrange(desc(avg_imdb)) %>%
+  top_n(20, avg_imdb) %>%
+  formattable(list(avg_imdb = color_bar("orange")), align = 'l')
+```
+
+### 4.5 Commercial Success v.s. Critical Acclaim
+
+```{r}
+IMDB %>%
+  top_n(20, profit) %>%
+  ggplot(aes(x = imdb_score, y = gross/10^6, size = profit/10^6, color = content_rating)) + 
+  geom_point() + 
+  geom_hline(aes(yintercept = 600)) + 
+  geom_vline(aes(xintercept = 7.75)) + 
+  geom_text_repel(aes(label = movie_title), size = 4) +
+  xlab("Imdb score") + 
+  ylab("Gross money earned in million dollars") + 
+  ggtitle("Commercial success Vs Critical acclaim") +
+  annotate("text", x = 8.5, y = 700, label = "High ratings \n & High gross") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+This is an analysis on the Commercial Success acclaimed by the movie (Gross earnings and profit earned) v.s. its IMDB Score.
+
+As expected, there is not much correlation since most critically acclaimed movies do not do much well commercially.
+
+### 4.6 Relation between number of facebook likes and imdb_score
+
+```{r}
+IMDB %>%
+  plot_ly(x = ~movie_facebook_likes, y = ~imdb_score, color = ~content_rating , mode = "markers", text = ~content_rating, alpha = 0.7, type = "scatter")
+```
+
+We divide this scatter plot by content-rating. Movie with extremely high Facebook likes tend to have higher imdb score. But the score for movie with low Facebook likes vary in a very wide range.
+
+
+
+<P style="page-break-before: always">
+
+## 5 Data Pre-processing
+
+### 5.1 Remove Names
+
+We have 1660 directors, and 3621 actors in this data.
+
+```{r}
+# number of directors
+sum(uniqueN(IMDB$director_name))
+# number of actors
+sum(uniqueN(IMDB[, c("actor_1_name", "actor_2_name", "actor_3_name")]))
+```
+
+Since all the names are so different for the whole dataset, there is no point to use names to predict score.
+
+Same with plot keywords, they are too diverse to be used in the prediction.
+
+And movie link is also a redundant variable.
+
+```{r}
+IMDB <- subset(IMDB, select = -c(director_name, actor_2_name, actor_1_name,
+                                 movie_title, actor_3_name, plot_keywords, 
+                                 movie_imdb_link))
+```
+
+### 5.2 Remove Linear Dependent Variables
+
+For the purpose of data exploration, we added two variables based on existing variables: profit and return_on_investment_perc. In order to avoid multicollinearity, here we remove these two added variables.
+
+```{r}
+IMDB <- subset(IMDB, select = -c(profit, return_on_investment_perc))
+```
+
+### 5.3 Remove Highly Correlated Variables
+
+First we plot the correlation heatmap for our data.
+
+```{r, warning=FALSE}
+ggcorr(IMDB, label = TRUE, label_round = 2, label_size = 3.5, size = 2, hjust = .85) +
+  ggtitle("Correlation Heatmap") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Based on the heatmap, we can see some high correlations (greater than 0.7) between predictors.
+
+According to the highest correlation value 0.95, we find actor_1_facebook_likes is highly correlated with the cast_total_facebook_likes, and both actor2 and actor3 are also somehow correlated to the total. So we want to modify them into two variables: actor_1_facebook_likes and other_actors_facebook_likes.
+
+There are high correlations among num_voted_users, num_user_for_reviews and num_critic_for_reviews. We want to keep num_voted_users and take the ratio of num_user_for_reviews and num_critic_for_reviews.
+
+```{r}
+# add up actor 2 and 3 facebook likes into other actors facebook likes
+IMDB$other_actors_facebook_likes <- IMDB$actor_2_facebook_likes + IMDB$actor_3_facebook_likes
+# use the ratio of critical reviews amount to total reviews amount
+IMDB$critic_review_ratio <- IMDB$num_critic_for_reviews / IMDB$num_user_for_reviews
+# delete columns
+IMDB <- subset(IMDB, select = -c(cast_total_facebook_likes, actor_2_facebook_likes, actor_3_facebook_likes, num_critic_for_reviews, num_user_for_reviews))
+```
+
+Now the correlation heatmap becomes like this.
+
+```{r, warning=FALSE}
+ggcorr(IMDB, label = TRUE, label_round = 2, label_size = 4, size = 3, hjust = .85) +
+  ggtitle("Correlation Heatmap") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+We don't see any strong correlation (absolute value greater than 0.7) any more.
+
+### 5.4 Bin Response Variable
+
+Our goal is to build a model, which can help us predict if a movie is good or bad. So we don't really want an exact score to be predicted, we only want to know how good or how bad is the movie. Therefore, we bin the score into 4 buckets: less than 4, 4~6, 6~8 and 8~10, which represents bad, OK, good and excellent respectively.
+
+```{r}
+IMDB$binned_score <- cut(IMDB$imdb_score, breaks = c(0,4,6,8,10))
+```
+
+### 5.5 Organize the dataset
+
+We want to reorder the columns to make the dataset easier to be understood. And we also renamed the columns to make the names shorter.
+
+```{r}
+IMDB <- IMDB[,c(9,4,5,14,12,2,3,13,1,6,10,7,8,11,15)]
+colnames(IMDB) <- c("budget", "gross", "user_vote", "critic_review_ratio",
+                    "movie_fb", "director_fb", "actor1_fb", "other_actors_fb",
+                    "duration", "face_number", "year", "country", "content",
+                    "imdb_score", "binned_score")
+```
+
+### 5.6 Split Data
+
+Here we split data into training, validation and test sets with the ratio of 6:2:2.
+
+```{r}
+set.seed(45)
+train.index <- sample(row.names(IMDB), dim(IMDB)[1]*0.6)
+valid.index <- sample(setdiff(row.names(IMDB), train.index), dim(IMDB)[1]*0.2)
+test.index <- setdiff(row.names(IMDB), union(train.index, valid.index))
+train <- IMDB[train.index, ]
+valid <- IMDB[valid.index, ]
+test <- IMDB[test.index, ]
+```
+
+
+
+<P style="page-break-before: always">
+
+## 6 Implement Algorithm
+
+### 6.1 Classification Tree
+
+#### 6.1.1 Full-grown Tree
+
+```{r, message=FALSE}
+library(rpart)
+library(rpart.plot)
+# Full grown tree
+class.tree <- rpart(binned_score ~ . -imdb_score, data = train, method = "class")
+## plot tree
+prp(class.tree, type = 1, extra = 1, under = TRUE, split.font = 2, varlen = 0) 
+```
+
+Classification rules:
+
+* 1. If (user_vote >= 551000) then class = (8,10].
+
+* 2. If (83000 <= user_vote < 551000) then class = (6,8].
+
+* 3. If (user_vote < 83000) and (duration >= 106) then class = (6,8].
+
+* 4. If (user_vote < 83000) and (duration < 106) and (gross < 7900000) then class = (6,8].
+
+* 5. If (user_vote < 83000) and (duration < 106) and (gross >= 7900000) and (movie_fb < 4500) then class = (4,6].
+
+* 6. If (user_vote < 83000) and (duration < 106) and (gross >= 7900000) and (movie_fb >= 4500) and (year < 2000) then class = (6,8].
+
+* 7. If (user_vote < 83000) and (duration < 106) and (gross >= 7900000) and (movie_fb >= 4500) and (year >= 2000) and (critic_review_ratio < 1.2) then class = (4,6].
+
+* 8. If (user_vote < 41000) and (duration < 106) and (gross >= 7900000) and (movie_fb >= 4500) and (year >= 2000) and (critic_review_ratio >= 1.2) then class = (4,6].
+
+* 9. If (41000 <= user_vote < 83000) and (duration < 106) and (gross >= 7900000) and (movie_fb >= 4500) and (year >= 2000) and (critic_review_ratio >= 1.2) then class = (6,8].
+
+From these rules, we can conclude that movies with a lot of votes in imdb website tend to have a higher score, which really makes sense because popular movies will have a lot of fans to vote high scores for them.
+
+On the contrary, if a movie has fewer votes, it can still be a good movie if its duration is longer (rule #3).
+
+It is surprise to see that movies make less profit are good, but ok if they make more profit (rule #4).
+
+#### 6.1.2 Best-pruned Tree
+
+```{r}
+# cross-validation procedure
+# argument cp sets the smallest value for the complexity parameter.
+set.seed(51)
+cv.ct <- rpart(binned_score ~ . -imdb_score, data = train, method = "class", 
+               cp = 0.00001, minsplit = 5, xval = 5)
+printcp(cv.ct)
+```
+
+The 8th tree has the lowest cross-validation error (xerror): 0.75564.
+
+```{r}
+# prune by lowest cp
+pruned.ct <- prune(cv.ct, 
+                   cp = cv.ct$cptable[which.min(cv.ct$cptable[,"xerror"]),"CP"])
+length(pruned.ct$frame$var[pruned.ct$frame$var == "<leaf>"])
+prp(pruned.ct, type = 1, extra = 1, split.font = 1, varlen = -10)
+```
+
+#### 6.1.3 Apply Model
+
+```{r}
+# apply model on training set
+tree.pred.train <- predict(pruned.ct, train, type = "class")
+# generate confusion matrix for training data
+confusionMatrix(tree.pred.train, train$binned_score)
+```
+
+Accuracy is 0.7803 for training set.
+
+```{r}
+# apply model on validation set
+tree.pred.valid <- predict(pruned.ct, valid, type = "class")
+# generate confusion matrix for validation data
+confusionMatrix(tree.pred.valid, valid$binned_score)
+```
+
+Accuracy is 0.7129 for validation set.
+
+```{r}
+# apply model on test set
+tree.pred.test <- predict(pruned.ct, test, type = "class")
+# generate confusion matrix for test data
+confusionMatrix(tree.pred.test, test$binned_score)
+```
+
+Accuracy is 0.7241 for test set.
+
+### 6.2 K-Nearest Neighbors
+
+#### 6.2.1 Data Pre-processing
+
+First, we need to prepare our data for applying knn purpose. Dummy variables are required for categorical variables. We use a copy of our data, so we can still use our original data in the future.
+
+```{r, message=FALSE, warning=FALSE}
+library(FNN)
+# Use model.matrix() to create dummy variables for country and content.
+IMDB2 <- IMDB
+IMDB2$country <- as.factor(IMDB2$country)
+IMDB2$content <- as.factor(IMDB2$content)
+IMDB2[,c("country_UK", "country_USA", "country_Others")] <- model.matrix( ~ country - 1, data = IMDB2)
+IMDB2[,c("content_G", "content_NC17", "content_PG", "content_PG13", "content_R")] <- model.matrix( ~ content - 1, data = IMDB2)
+# Select useful variables for future prediction.
+IMDB2 <- IMDB2[, c(1,2,3,4,5,6,7,8,9,10,11,16,17,18,19,20,21,22,23,15)]
+# Partition the data into training and validation sets.
+set.seed(52)
+train2 <- IMDB2[train.index, ]
+valid2 <- IMDB2[valid.index, ]
+test2 <- IMDB2[test.index, ]
+```
+
+Then we need to normalize our data.
+
+```{r}
+# initialize normalized training, validation, test data, complete data frames to originals
+train2.norm <- train2
+valid2.norm <- valid2
+test2.norm <- test2
+IMDB2.norm <- IMDB2
+# use preProcess() from the caret package to normalize predictors.
+norm.values <- preProcess(train2[, -20], method=c("center", "scale"))
+train2.norm[, -20] <- predict(norm.values, train2[, -20])
+valid2.norm[, -20] <- predict(norm.values, valid2[, -20])
+test2.norm[, -20] <- predict(norm.values, test2[, -20])
+IMDB2.norm[, -20] <- predict(norm.values, IMDB2[, -20])
+```
+
+#### 6.2.2 Find the best k
+
+We will set k as 1 to 20, and build 20 different models. We calculate each model's classification accuracy, and find the best k according to the highest accuracy.
+
+```{r, warning=FALSE}
+# initialize a data frame with two columns: k, and accuracy.
+accuracy.df <- data.frame(k = seq(1, 20, 1), accuracy = rep(0, 20))
+# compute knn for different k on validation data.
+for(i in 1:20) {
+  knn.pred <- knn(train2.norm[, -20], valid2.norm[, -20],
+                  cl = train2.norm[, 20], k = i)
+  accuracy.df[i, 2] <- confusionMatrix(knn.pred, valid2.norm[, 20])$overall[1]
+}
+accuracy.df
+```
+
+When k = 9, we get the highest accuracy: 0.7142857
+
+#### 6.2.3 Apply model on test set
+
+```{r}
+# apply model on test set
+knn.pred.test <- knn(train2.norm[, -20], test2.norm[, -20],
+                cl = train2.norm[, 20], k = 9)
+# generate confusion matrix for test data
+accuracy <- confusionMatrix(knn.pred.test, test2.norm[, 20])$overall[1]
+accuracy
+```
+
+Test set accuracy: 0.7456258
+
+### 6.3 Random Forest
+
+#### 6.3.1 Build Model
+
+```{r, message=FALSE}
+library(randomForest)
+set.seed(53)
+rf <- randomForest(binned_score ~ . -imdb_score, data = train, mtry = 5)
+# Show model error
+plot(rf)
+legend('topright', colnames(rf$err.rate), col=1:5, fill=1:5)
+```
+
+The black line shows the overall error rate which falls below 30%. The red, green, blue and aqua lines show the error rate for bad, ok, good and excellent movies respectively. We can see that right now we’re much more successful predicting good movies. We cannot predict bad movies very well.
+
+Let’s look at relative variable importance by plotting the mean decrease in Gini calculated across all trees.
+
+```{r}
+# Get importance
+importance <- importance(rf)
+varImportance <- data.frame(Variables = row.names(importance), 
+                            Importance = round(importance[ ,'MeanDecreaseGini'],2))
+
+# Create a rank variable based on importance
+rankImportance <- varImportance %>%
+  mutate(Rank = paste0('#',dense_rank(desc(Importance))))
+
+# Use ggplot2 to visualize the relative importance of variables
+ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
+                           y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = 'Variables') +
+  coord_flip() + 
+  theme_few()
+```
+
+From the plot, we see **User_vote** is a very important variable, while **face_number**, **content** and **country** are not so important.
+
+#### 6.3.2 Apply Model
+
+```{r}
+set.seed(632)
+# apply model on validation set
+rf.pred.valid <- predict(rf, valid)
+# generate confusion matrix for validation data
+confusionMatrix(rf.pred.valid, valid$binned_score)
+```
+
+Accuracy is 0.7642 for validation set.
+
+```{r}
+set.seed(633)
+# apply model on test set
+rf.pred.test <- predict(rf, test)
+# generate confusion matrix for test data
+confusionMatrix(rf.pred.test, test$binned_score)
+```
+
+Accuracy is 0.7658 for test set.
+
+
+
+<P style="page-break-before: always">
+
+## 7 Conclusion
+
+Accuracy table for different models:
+
+Dataset | Decision Tree | K-NN | Random Forest
+--------|--------|--------|--------
+Training   | 0.7803 |        |          
+Validation | 0.7129 | 0.7143 | 0.7642     
+Test       | 0.7241 | 0.7456 | 0.7658     
+
+For Decision tree model, we have a higher accuracy for training data because the tree was built based on the training data.
+
+Based on the overall performance, we find the best model is random forest, which gives a high accuracy around 0.76.
+
+
