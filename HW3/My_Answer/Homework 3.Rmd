@@ -1,0 +1,461 @@
+---
+title: "Homework"
+author: "Yueming Zhang"
+date: "10/18/2017"
+output: 
+    html_document:
+    fig_width: 10
+    fig_height: 7
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Task 1: Tutorial
+
+> Read R tutorial on “Regression.” The data sets (women.R, mtcars.R and states.R) referenced in the tutorial are included the Homework 3 folder to allow you practice regression model building.
+
+## Task 2: Concrete Slump Test Data
+
+```{r echo=FALSE}
+library(MASS)
+library(readxl)
+library(ggplot2)
+library(car)
+library(data.table)
+library(bootstrap)
+concreteSlump <- read_excel("~/Desktop/2017 Fall Semester/IE 7275 Data Mining/HW/HW 3/Data for HW 3/Concrete Slump Test Data.xlsx")
+## Remove sp
+## Remove spaces from column names
+setnames(x = concreteSlump, old = names(concreteSlump),
+         new = gsub(" ", "", names(concreteSlump)))
+```
+
+First, let's take a look at the data structure.
+
+```{r}
+str(concreteSlump)
+```
+
+Notice that the first variable is just the number of the observation, so we want to ignore it during the analysis.
+
+> 1. Create a scatterplot matrix of “Concrete Slump Test Data” and select an initial set of predictor variables.
+
+Let's first examine the bivariate relationships with the *cor()* function, and then generate the scatter plots with *scatterplotMatrix()* function.
+
+```{r}
+cor(concreteSlump[, -1])
+scatterplotMatrix(concreteSlump[, -1], spread=FALSE,
+                  main = "Scatter Plot Matrix")
+```
+
+According to the data description document, we have 7 predictor variables: Cement, Slag, Fly Ash, Water, SP, Coarse Aggregate and Fine Aggregate. The rest three Slump, Slump Flow and 28-day Compressive Strength are response variables.
+
+From the scatter plot matrix, we can see Slump and Slump Flow are highly correlated to each other, and 28-day Compressive Strength does not have a strong correlation with the other two response variables. Here, we choose Slump Flow as our response variable in the following analysis.
+
+Let's plot a new scatter plot matrix for the initial set of predictor variables and their response variable.
+
+```{r}
+scatterplotMatrix(concreteSlump[, -c(1, 9, 11)], spread=FALSE,
+                  main = "New Scatter Plot Matrix")
+```
+
+> 2. Build a few potential regression models using “Concrete Slump Test Data”.
+
+In this case, multiple linear regression and polynomial regression are appropriate models.
+
+#### Multiple linear regression:
+
+```{r}
+Mfit <- lm(SlumpFlow ~ Cement + Slag + FlyAsh + Water + SP + CoarseAggregate + FineAggregate, data = concreteSlump)
+summary(Mfit)
+```
+
+#### Polynomial regression:
+
+```{r}
+Pfit <- lm(SlumpFlow ~ (Cement + Slag + FlyAsh + Water + SP + CoarseAggregate + FineAggregate)^2, data = concreteSlump)
+summary(Pfit)
+```
+
+Although the Adjusted R-squared value of polynomial regression model is higher than that of multiple linear regression model, we want to use MLR model for the following analysis since polynomial regression model might cause overfitting to some extent.
+
+> 3. Perform regression diagnostics using both typical approach and enhanced approach.
+
+Here, we want to use the multiple linear regression model **Mfit** to carry out the following tasks.
+
+#### Regression diagnostics with typical approach:
+
+```{r}
+par(mfrow = c(2, 2))
+plot(Mfit)
+```
+
+From the top right graph, we can see all the points fall close to the 45-degree line, so the normality assumption is satisfied.
+
+From the top left graph, there is no systematic relationship between the residual and predicted values, so the linearity assumption is satisfied.
+
+The bottom left graph shows a random band around a horizontal line, so the homoscedasticity assumption is satisfied. 
+
+#### Regression diagnostics with enhanced approach:
+
+* Normality
+
+```{r}
+qqPlot(Mfit, labels = row.names(concreteSlump), id.method = "identify",
+       simulate = TRUE, main = "Q-Q Plot")
+```
+
+All the points fall close to the line and are within the confidence envelope, suggesting we've met the normality assumption very well.
+
+* Independence
+```{r}
+durbinWatsonTest(Mfit)
+```
+
+The non-significant p-value (p = 0.8) suggests a lack of autocorrelation, and conversely an independence of errors.
+
+* Linearity
+```{r}
+crPlots(Mfit)
+```
+
+The component plus residual plots confirm that we've met the linearity assumption.
+
+* Homoscedasticity
+```{r}
+ncvTest(Mfit)
+spreadLevelPlot(Mfit)
+```
+
+The score test is non-significant (p = 0.63), suggesting that we've met the constant variance assumption. There is no evidence of heteroscedasticity. The suggested power is close to 1.7, here we do not consider to use transformation.
+
+> 4. Identify unusual observations and take corrective measures.
+
+#### Unusual observations
+
+* Outliers
+```{r}
+outlierTest(Mfit)
+```
+
+There is no significant outlier in this dataset.
+
+* High leverage points
+```{r}
+hat.plot <- function(Mfit) {
+  p <- length(coefficients(Mfit))
+  n <- length(fitted(Mfit))
+  plot(hatvalues(Mfit), main="Index Plot of Hat Values")
+  abline(h = c(2, 3) * p / n, col = "red", lty = 2)
+  identify(1:n, hatvalues(Mfit), names(hatvalues(Mfit)))
+  }
+hat.plot(Mfit)
+```
+
+We found the 4th, 83th and 88th observations are above the line.
+
+* Influential observations
+```{r}
+cutoff <- 4 / (nrow(concreteSlump) - length(Mfit$coefficients) - 2)
+plot(Mfit, which = 4, cook.levels = cutoff)
+abline(h = cutoff, lty = 2, col = "red")
+```
+
+The graph identifies 69, 8 and 14 as influential observations.
+
+#### Corrective measures
+  
+* Transforming variables
+  
+```{r}
+summary(powerTransform(concreteSlump$SlumpFlow))
+```
+
+Here suggests to transform response variable with the power of 1.5, but after applying, we don't see a significant change in R-squared value.
+
+> 5. Select the best regression model.
+
+#### Comparing models
+
+```{r}
+fit1 <- lm(SlumpFlow ~ Cement + Slag + FlyAsh + Water + SP + CoarseAggregate + FineAggregate,
+           data = concreteSlump)
+fit2 <- lm(SlumpFlow ~ FlyAsh + Water + CoarseAggregate + FineAggregate,
+           data = concreteSlump)
+anova(fit2, fit1)
+```
+
+The test is nonsignificant (p = 0.0613), but the p-value is not very big. So we cannot justify that we should drop them from our model.
+
+#### variable selection
+
+```{r}
+stepAIC(Mfit, direction = "backward")
+```
+
+#### all subsets selection
+
+```{r}
+library(leaps)
+leaps <- regsubsets(SlumpFlow ~ Cement + Slag + FlyAsh + Water + SP + CoarseAggregate + FineAggregate,
+                    data = concreteSlump, nbest = 4)
+plot(leaps, scale = "adjr2")
+```
+
+The graph suggests that the two-predictor (Slag and Water) model is the best with adjusted R-square of 0.49.
+
+> 6. Fine tune the selection of predictor variables.
+
+#### Cross-validation
+
+```{r}
+shrinkage <- function(fit, k=10){
+require(bootstrap)
+theta.fit <- function(x,y){lsfit(x,y)}
+theta.predict <- function(fit,x){cbind(1,x)%*%fit$coef}
+x <- fit$model[,2:ncol(fit$model)]
+y <- fit$model[,1]
+results <- crossval(x, y, theta.fit, theta.predict, ngroup=k)
+r2 <- cor(y, fit$fitted.values)^2
+r2cv <- cor(y, results$cv.fit)^2
+cat("Original R-square =", r2, "\n")
+cat(k, "Fold Cross-Validated R-square =", r2cv, "\n")
+cat("Change =", r2-r2cv, "\n")
+}
+shrinkage(Mfit)
+```
+
+```{r}
+fit <- lm(SlumpFlow ~ Cement + FlyAsh + Water + CoarseAggregate + FineAggregate, data = concreteSlump)
+shrinkage(fit)
+```
+
+The second model has a higher Cross-validation R-square value.
+
+> 7. Interpret the prediction results.
+
+```{r}
+fit <- lm(SlumpFlow ~ Cement + FlyAsh + Water + CoarseAggregate + FineAggregate, data = concreteSlump)
+summary(fit)
+```
+
+The best model is:
+
+SlumpFlow = -249.5 + 0.05366 x Cement + 0.06101 x FlyAsh + 0.72313 x Water + 0.07291 x CoarseAggregate + 0.09554 x FineAggregate
+
+## Task 3: Forest Fire Data
+
+
+```{r}
+library(ggplot2)
+library(car)
+library(data.table)
+forestfires <- read_excel("~/Desktop/2017 Fall Semester/IE 7275 Data Mining/HW/HW 3/Data for HW 3/Forest Fires Data.xlsx")
+```
+
+> Data exploration and classification.
+
+```{r}
+str(forestfires)
+```
+The aim of this task is to understand the how the burned are of forest fires, in the northeast region of Portugal, is related to the meteorological and other data
+The data can be divided into four types: Spatial Data (X & Y), Temporal Data (Month & Day), FWI Data (FFMC, DMC, DC, ISI) and Meteorological Data (Temp, RH, Wind)
+
+Before we get into the details into the data, we will do some data exploration by drawing some boxplots and histograms
+
+> The pattern of response data (Area) in original dataset
+
+```{r}
+hist(forestfires$Area)
+```
+
+we can see the area data is very skewed toward 0, so we will make logarithm transformation and see the transformed structure of that.
+
+```{r}
+forestfires$Area <- forestfires$Area + 1
+forestfires$Area <- log(forestfires$Area)
+hist(forestfires$Area)
+```
+
+> Data exploration---Find the relationship between the Forestfires and Spatial Variables (X & Y)
+
+```{r}
+par(mfrow = c(1,1))
+forestfires <- forestfires[forestfires$Area>0, ]
+boxplot(forestfires$Area ~ as.factor(X), data = forestfires, xlab = "X", ylab = "fire area", main = "forest fire area for difference X's")
+boxplot(forestfires$Area ~ as.factor(Y), data = forestfires, xlab = "Y", ylab = "fire area", main = "forest fire area for difference X's")
+```
+
+Based on the boxplots, we can see that it doesn't show any obvious relationship between the spatial locations and the fire areas
+
+> Data exploration---Find the relationship between the Forestfires and Temporal Variables (Months & Days)
+
+```{r}
+boxplot(forestfires$Area ~ forestfires$Month, data = forestfires, xlab = "season", ylab = "fire area", main = "forest fire area for different seasons")
+```
+
+The numbers of observations fall into every months are very unbalanced, which means it has a great risk of overfitting.
+
+> Data Classification and Explration---Replicate months into seasons and find the relationship between Seasons and Forest fires
+
+```{r}
+forestfires$Season <- rep("spring", 270)
+for(i in 1:270) {if (forestfires$Month[i] %in% c("dec", "jan", "feb")) forestfires$Season[i] <- "winter"
+if (forestfires$Month[i] %in% c("sep", "oct", "nov")) forestfires$Season[i] <- "autumn"
+if (forestfires$Month[i] %in% c("jul", "jun", "aug")) forestfires$Season[i] <- "summer"}
+forestfires$Season <- as.factor(forestfires$Season)
+forestfires$Month <- NULL
+boxplot(forestfires$Area ~ forestfires$Season, data = forestfires, xlab = "season", ylab = "fire area", main = "forest fire area for different seasons")
+```
+
+Now we can see that there is a trend that summer might tend to have less change to get forest fires.
+
+> Data exploration---Find the relationship between Days and Forestfires
+
+```{r}
+boxplot(forestfires$Area ~ forestfires$Day, data = forestfires, xlab = "days", ylab = "fire area", main = "forest fire area for different days")
+```
+
+Accroding to the boxplot we could see that Saturday tend to have higher chance to get gorest fires
+
+> 1. Create a scatterplot matrix of “Forest Fire Data” and select an initial set of predictor variables.
+
+```{r, warning = FALSE}
+scatterplotMatrix(forestfires[, 4:12], spread=FALSE, main = "Scatter Plot Matrix")
+```
+
+Based on this scater plots, we cannot find any linear trend between forest fires and other variables (FWI & Meterological Data)
+
+> 2. Build a few potential regression models using “Forest Fire Data”.
+
+We start from the simplest model, without any interaction and quadratic terms
+
+```{r}
+reg0 <- lm(Area ~ Season + Day + FFMC + DMC + DC + ISI + Temp + RH + Wind + Rain, data = forestfires)
+summary(reg0)
+```
+
+we can see that the R square is pretty small, which means the model is terrible. It might simply because that the predictors don't have enough information to explain the response
+
+Therefore, we will apply quadratic terms between the four meterological indices (FFMC, DMCM, DC, ISI) since the influnce of these four indices might not independentas.
+
+```{r}
+reg1 <- lm(Area ~ Season + Day + (FFMC + DMC + DC + ISI)^2 + Temp + RH + Wind, data = forestfires)
+summary(reg1)
+```
+
+It seems more much better compared to the previous model, at least now we have acceptable F-test.
+
+> 3. Perform regression diagnostics using both typical approach and enhanced approach.
+
+(1) Regression diagnostics with typical approach
+
+```{r}
+par(mfrow = c(2,2))
+plot(reg1)
+```
+
+According to the graph on the upper right (Q-Q plot), the points on this graph should fall on the straight 45-degree line, which means it meets the normality assumption
+The Linearity also can be figured out from the Residuals versus Fitted graph (upper left), the model captures all the variance represents in the data since it leaves nothing but random noise, which means the model also meets this assumption.
+From the Scale-Location graph, we can see the points is a random band around a horizontal line. The assumption is met.
+
+(2) Regression diagnostics with enhanced approach
+    -Normality
+    
+```{r}
+par(mfrow = c(1,1))
+qqPlot(reg1, labels = row.names(forestfires), id.method = "identify", simulate = TRUE, main = "Q-Q Plot")
+```
+
+Based on this graph, we can see the points fall close to the line but a little bit beyond the confidence envelope, which means the normality assuption doesn't meet very well.
+
+-Independence
+
+```{r}
+durbinWatsonTest(reg1)
+```
+
+The nonsignificant p-value (p=0)， which means some oberservations from the original data might not be independent.
+
+-Linearity
+
+```{r}
+crPlots(reg0)
+```
+
+Nonlinearity shows in the plot, which means it may not have adequately modeled the function form of that predictor in the regression. The curvilinear components such as polynomial terms will be applied in the further function.
+
+-Homoscedasticity
+
+```{r}
+ncvTest(reg1)
+par(mfrow = c(1,1))
+spreadLevelPlot(reg1)
+```
+
+Based on the graph, the points form a random horizontal band around a horizontal line, so this assumption is met.
+
+> 4. Identify unusual observations and take corrective measures.
+
+- High leverage points 
+
+```{r}
+hat.plot<-function(reg1) {
+  p<-length(coefficients(reg1))
+  n<-length(fitted(reg1))
+  plot(hatvalues(reg1), main="Index Plot of Hat Values")
+  abline(h=c(2,3)*p/n,col="red", lty=2)
+  identify(1:n,hatvalues(reg1), names(hatvalues(reg1)))
+}
+hat.plot(reg1)
+```
+
+There are three obvious outliers above the red line (74, 86, 245 respectively).
+
+- Influential observation
+
+```{r}
+cutoff<-4/(nrow(forestfires)-length(reg1$coefficients)-2)
+plot(reg1,which=4,cook.levels=cutoff)
+abline(h=cutoff,lty=2,col="red")
+```
+
+There are three influential observations (210, 249, 269)
+
+> 5. Select the best regression model.
+
+- Comparing nested models using the anova() function
+
+```{r}
+anova(reg0, reg1)
+```
+
+Since the p value is pretty small (smaller than 0.05), we can conclude that the new model add linear predicion and we will accept this model.
+
+> 6. Fine tune the selection of predictor variables.
+
+```{r}
+reg2 <- step(reg1, direction = "backward")
+summary(reg2)
+```
+
+> 7. Interpret the prediction results.
+
+Based on the previous the output of previous question.
+The final formula will be: Area = (2.261e-02)FFMC + (-1.292e-01)DMC + (2.610e-02)DC + (1.654e-03)FFMC:DMC + (-2.992e-04)*FFMC:DC + (-1.916e-05)DMC:DC 
+
+
+
+
+
+
+
+
+
+
+
