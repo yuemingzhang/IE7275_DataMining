@@ -2,9 +2,7 @@
 title: "Project Report: IMDB 5000 Movie Dataset"
 author: "Yueming Zhang"
 date: "12/7/2017"
-output: 
-  html_document:
-    keep_md: true
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
