@@ -4,12 +4,8 @@ author: "Yueming Zhang"
 date: "12/7/2017"
 output:
   rmarkdown::github_document
-    toc: yes
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
 <P style="page-break-before: always">
 
