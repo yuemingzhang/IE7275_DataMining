@@ -3,7 +3,7 @@ title: "Project Report: IMDB 5000 Movie Dataset"
 author: "Yueming Zhang"
 date: "12/7/2017"
 output:
-  html_document: 
+  rmarkdown::github_document
     toc: yes
 ---
 
